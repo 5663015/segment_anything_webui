@@ -34,7 +34,7 @@ git clone https://github.com/5663015/segment_anything_webui.git
 python app.py
 ```
 
-**注意：**默认模型是 `vit_b`，笔记本 CPU 可运行。运行硬件默认是 `cuda`。
+**注意：** 默认模型是 `vit_b`，笔记本 CPU 可运行。运行硬件默认是 `cuda`。
 
 ## TODO
 
