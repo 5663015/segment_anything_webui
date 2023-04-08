@@ -36,15 +36,15 @@ def inference(device, model_type, input_img, points_per_side, pred_iou_thresh, s
     masks = mask_generator.generate(input_img)
     sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
 
-    img = np.ones((input_img.shape[0], input_img.shape[1], 3))
+    mask_all = np.ones((input_img.shape[0], input_img.shape[1], 3))
     for ann in sorted_anns:
         m = ann['segmentation']
         color_mask = np.random.random((1, 3)).tolist()[0]
         for i in range(3):
-            img[m==True, i] = color_mask[i]
-    result = input_img / 255 * 0.3 + img * 0.7
+            mask_all[m==True, i] = color_mask[i]
+    result = input_img / 255 * 0.3 + mask_all * 0.7
 
-    return result
+    return result, mask_all
 
 
 
@@ -94,7 +94,10 @@ with gr.Blocks() as demo:
             input_image = gr.Image(type="numpy")
             with gr.Row():
                 button = gr.Button("Auto!")
-        image_output = gr.Image(type='numpy')
+        with gr.Tab(label='原图+mask'):
+            image_output = gr.Image(type='numpy')
+        with gr.Tab(label='Mask'):
+            mask_output = gr.Image(type='numpy')
 
     gr.Examples(
         examples=[os.path.join(os.path.dirname(__file__), "./images/53960-scaled.jpg"),
@@ -117,7 +120,7 @@ with gr.Blocks() as demo:
     button.click(inference, inputs=[device, model_type, input_image, points_per_side, pred_iou_thresh,
                                 stability_score_thresh, min_mask_region_area, stability_score_offset, box_nms_thresh,
                                 crop_n_layers, crop_nms_thresh],
-             outputs=image_output)
+             outputs=[image_output, mask_output])
 
 
 
