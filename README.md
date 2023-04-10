@@ -1,6 +1,6 @@
 # Segment Anything WebUI
 
-This project is based on **[Segment Anything Model](https://segment-anything.com/) ** by Meta. The UI is based on [Gradio](https://gradio.app/). 
+This project is based on **[Segment Anything Model](https://segment-anything.com/)** by Meta. The UI is based on [Gradio](https://gradio.app/). 
 
 - Try deme on HF: [AIBoy1993/segment_anything_webui](https://huggingface.co/spaces/AIBoy1993/segment_anything_webui)
 
