@@ -2,7 +2,13 @@
 
 This project is based on **[Segment Anything Model](https://segment-anything.com/) ** by Meta. The UI is based on [Gradio](https://gradio.app/). 
 
+- Try deme on HF: [AIBoy1993/segment_anything_webui](https://huggingface.co/spaces/AIBoy1993/segment_anything_webui)
+
 ![](./images/20230408023615.png)
+
+## Change Logs
+
+- [2023-4-11] Support video segmentation. 
 
 ## **Usage**
 
@@ -38,4 +44,6 @@ python app.py
 
 ## TODO
 
-- Add segmentation prompt 
+- Add segmentation prompt (point and box)
+
+- Add text prompt

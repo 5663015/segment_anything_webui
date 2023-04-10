@@ -14,8 +14,25 @@ models = {
     'vit_h': './checkpoints/sam_vit_h_4b8939.pth'
 }
 
-def inference(device, model_type, input_img, points_per_side, pred_iou_thresh, stability_score_thresh, min_mask_region_area,
-              stability_score_offset, box_nms_thresh, crop_n_layers, crop_nms_thresh):
+
+def segment_one(img, mask_generator, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+    masks = mask_generator.generate(img)
+    sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
+    mask_all = np.ones((img.shape[0], img.shape[1], 3))
+    for ann in sorted_anns:
+        m = ann['segmentation']
+        color_mask = np.random.random((1, 3)).tolist()[0]
+        for i in range(3):
+            mask_all[m == True, i] = color_mask[i]
+    result = img / 255 * 0.3 + mask_all * 0.7
+    return result, mask_all
+
+
+def inference(device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh, min_mask_region_area,
+                  stability_score_offset, box_nms_thresh, crop_n_layers, crop_nms_thresh, input_x, progress=gr.Progress()):
+    # sam model
     sam = sam_model_registry[model_type](checkpoint=models[model_type]).to(device)
     mask_generator = SamAutomaticMaskGenerator(
         sam,
@@ -33,37 +50,42 @@ def inference(device, model_type, input_img, points_per_side, pred_iou_thresh, s
         output_mode='binary_mask'
     )
 
-    masks = mask_generator.generate(input_img)
-    sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
-
-    mask_all = np.ones((input_img.shape[0], input_img.shape[1], 3))
-    for ann in sorted_anns:
-        m = ann['segmentation']
-        color_mask = np.random.random((1, 3)).tolist()[0]
-        for i in range(3):
-            mask_all[m==True, i] = color_mask[i]
-    result = input_img / 255 * 0.3 + mask_all * 0.7
-
-    return result, mask_all
-
+    # input is image, type: numpy
+    if type(input_x) == np.ndarray:
+        result, mask_all = segment_one(input_x, mask_generator)
+        return result, mask_all
+    elif isinstance(input_x, str):  # input is video, type: path (str)
+        cap = cv2.VideoCapture(input_x)     # read video
+        frames_num = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        out = cv2.VideoWriter("output.mp4", cv2.VideoWriter_fourcc('x', '2', '6', '4'), fps, (W, H), isColor=True)
+        for _ in progress.tqdm(range(int(frames_num)), desc='Processing video ({} frames, size {}x{})'.format(int(frames_num), W, H)):
+            ret, frame = cap.read()     # read a frame
+            result, mask_all = segment_one(frame, mask_generator, seed=2023)
+            result = (result * 255).astype(np.uint8)
+            out.write(result)
+        out.release()
+        cap.release()
+        return 'output.mp4'
 
 
 with gr.Blocks() as demo:
     with gr.Row():
         gr.Markdown(
             '''# Segment Anything!🚀
-            分割一切！CV的GPT-3时刻！
-            [**官方网址**](https://segment-anything.com/)
+            The Segment Anything Model (SAM) produces high quality object masks from input prompts such as points or boxes, and it can be used to generate masks for all objects in an image. It has been trained on a dataset of 11 million images and 1.1 billion masks, and has strong zero-shot performance on a variety of segmentation tasks.
+            [**Official Project**](https://segment-anything.com/)
             '''
         )
         with gr.Row():
-            # 选择模型类型
-            model_type = gr.Dropdown(["vit_b", "vit_l", "vit_h"], value='vit_b', label="选择模型")
-            # 选择device
-            device = gr.Dropdown(["cpu", "cuda"], value='cuda', label="选择你的硬件")
+            # select model
+            model_type = gr.Dropdown(["vit_b", "vit_l", "vit_h"], value='vit_b', label="Select Model")
+            # select device
+            device = gr.Dropdown(["cpu", "cuda"], value='cuda', label="Select Device")
 
     # 参数
-    with gr.Accordion(label='参数调整', open=False):
+    with gr.Accordion(label='Parameters', open=False):
         with gr.Row():
             points_per_side = gr.Number(value=32, label="points_per_side", precision=0,
                                         info='''The number of points to be sampled along one side of the image. The total 
@@ -88,43 +110,65 @@ with gr.Blocks() as demo:
                                         info='''The box IoU cutoff used by non-maximal suppression to filter duplicate 
                                         masks between different crops.''')
 
-    # 显示图片
-    with gr.Row().style(equal_height=True):
-        with gr.Column():
-            input_image = gr.Image(type="numpy")
-            with gr.Row():
-                button = gr.Button("Auto!")
-        with gr.Tab(label='原图+mask'):
-            image_output = gr.Image(type='numpy')
-        with gr.Tab(label='Mask'):
-            mask_output = gr.Image(type='numpy')
+    # Show image
+    with gr.Tab(label='Image'):
+        with gr.Row().style(equal_height=True):
+            with gr.Column():
+                input_image = gr.Image(type="numpy")
+                with gr.Row():
+                    button = gr.Button("Auto!")
+            with gr.Tab(label='Image+Mask'):
+                output_image = gr.Image(type='numpy')
+            with gr.Tab(label='Mask'):
+                output_mask = gr.Image(type='numpy')
 
-    gr.Examples(
-        examples=[os.path.join(os.path.dirname(__file__), "./images/53960-scaled.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/2388455-scaled.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/1.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/2.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/3.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/4.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/5.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/6.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/7.jpg"),
-                  os.path.join(os.path.dirname(__file__), "./images/8.jpg"),
-                  ],
-        inputs=input_image,
-        outputs=image_output,
-    )
+        gr.Examples(
+            examples=[os.path.join(os.path.dirname(__file__), "./images/53960-scaled.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/2388455-scaled.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/1.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/2.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/3.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/4.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/5.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/6.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/7.jpg"),
+                      os.path.join(os.path.dirname(__file__), "./images/8.jpg"),
+                      ],
+            inputs=input_image,
+            outputs=output_image,
+        )
+    # Show video
+    with gr.Tab(label='Video'):
+        with gr.Row().style(equal_height=True):
+            with gr.Column():
+                input_video = gr.Video()
+                with gr.Row():
+                    button_video = gr.Button("Auto!")
+            output_video = gr.Video(format='mp4')
+        gr.Markdown('''
+        **Note:** processing video will take a long time, please upload a short video.
+        ''')
+        gr.Examples(
+            examples=[os.path.join(os.path.dirname(__file__), "./images/video1.mp4"),
+                      os.path.join(os.path.dirname(__file__), "./images/video2.mp4")
+                      ],
+            inputs=input_video,
+            outputs=output_video
+        )
+
+    # button image
+    button.click(inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
+                                    min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
+                                    crop_nms_thresh, input_image],
+                 outputs=[output_image, output_mask])
+    # button video
+    button_video.click(inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
+                                    min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
+                                    crop_nms_thresh, input_video],
+                       outputs=[output_video])
 
 
-    # 按钮交互
-    button.click(inference, inputs=[device, model_type, input_image, points_per_side, pred_iou_thresh,
-                                stability_score_thresh, min_mask_region_area, stability_score_offset, box_nms_thresh,
-                                crop_n_layers, crop_nms_thresh],
-             outputs=[image_output, mask_output])
-
-
-
-demo.launch(debug=True)
+demo.queue().launch(debug=True, enable_queue=True)
 
 
 
