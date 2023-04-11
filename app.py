@@ -1,73 +1,8 @@
 import os
-import cv2
-import sys
-import numpy as np
 import gradio as gr
-from PIL import Image
-import matplotlib.pyplot as plt
-from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+from inference import run_inference
 
 
-models = {
-    'vit_b': './checkpoints/sam_vit_b_01ec64.pth',
-    'vit_l': './checkpoints/sam_vit_l_0b3195.pth',
-    'vit_h': './checkpoints/sam_vit_h_4b8939.pth'
-}
-
-
-def segment_one(img, mask_generator, seed=None):
-    if seed is not None:
-        np.random.seed(seed)
-    masks = mask_generator.generate(img)
-    sorted_anns = sorted(masks, key=(lambda x: x['area']), reverse=True)
-    mask_all = np.ones((img.shape[0], img.shape[1], 3))
-    for ann in sorted_anns:
-        m = ann['segmentation']
-        color_mask = np.random.random((1, 3)).tolist()[0]
-        for i in range(3):
-            mask_all[m == True, i] = color_mask[i]
-    result = img / 255 * 0.3 + mask_all * 0.7
-    return result, mask_all
-
-
-def inference(device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh, min_mask_region_area,
-                  stability_score_offset, box_nms_thresh, crop_n_layers, crop_nms_thresh, input_x, progress=gr.Progress()):
-    # sam model
-    sam = sam_model_registry[model_type](checkpoint=models[model_type]).to(device)
-    mask_generator = SamAutomaticMaskGenerator(
-        sam,
-        points_per_side=points_per_side,
-        pred_iou_thresh=pred_iou_thresh,
-        stability_score_thresh=stability_score_thresh,
-        stability_score_offset=stability_score_offset,
-        box_nms_thresh=box_nms_thresh,
-        crop_n_layers=crop_n_layers,
-        crop_nms_thresh=crop_nms_thresh,
-        crop_overlap_ratio=512 / 1500,
-        crop_n_points_downscale_factor=1,
-        point_grids=None,
-        min_mask_region_area=min_mask_region_area,
-        output_mode='binary_mask'
-    )
-
-    # input is image, type: numpy
-    if type(input_x) == np.ndarray:
-        result, mask_all = segment_one(input_x, mask_generator)
-        return result, mask_all
-    elif isinstance(input_x, str):  # input is video, type: path (str)
-        cap = cv2.VideoCapture(input_x)     # read video
-        frames_num = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        out = cv2.VideoWriter("output.mp4", cv2.VideoWriter_fourcc('x', '2', '6', '4'), fps, (W, H), isColor=True)
-        for _ in progress.tqdm(range(int(frames_num)), desc='Processing video ({} frames, size {}x{})'.format(int(frames_num), W, H)):
-            ret, frame = cap.read()     # read a frame
-            result, mask_all = segment_one(frame, mask_generator, seed=2023)
-            result = (result * 255).astype(np.uint8)
-            out.write(result)
-        out.release()
-        cap.release()
-        return 'output.mp4'
 
 
 with gr.Blocks() as demo:
@@ -82,9 +17,9 @@ with gr.Blocks() as demo:
             # select model
             model_type = gr.Dropdown(["vit_b", "vit_l", "vit_h"], value='vit_b', label="Select Model")
             # select device
-            device = gr.Dropdown(["cpu", "cuda"], value='cuda', label="Select Device")
+            device = gr.Dropdown(["cpu", "cuda"], value='cpu', label="Select Device")
 
-    # 参数
+    # parameters
     with gr.Accordion(label='Parameters', open=False):
         with gr.Row():
             points_per_side = gr.Number(value=32, label="points_per_side", precision=0,
@@ -115,8 +50,10 @@ with gr.Blocks() as demo:
         with gr.Row().style(equal_height=True):
             with gr.Column():
                 input_image = gr.Image(type="numpy")
-                with gr.Row():
-                    button = gr.Button("Auto!")
+                text = gr.Textbox(label='Text prompt(optional)', info=
+                    'If you input a word, the OWL-ViT model will be run to detect the object in image, '
+                    'and the box will be fed into SAM model to predict mask.')
+                button = gr.Button("Auto!")
             with gr.Tab(label='Image+Mask'):
                 output_image = gr.Image(type='numpy')
             with gr.Tab(label='Mask'):
@@ -157,14 +94,14 @@ with gr.Blocks() as demo:
         )
 
     # button image
-    button.click(inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
+    button.click(run_inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
                                     min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
-                                    crop_nms_thresh, input_image],
+                                    crop_nms_thresh, input_image, text],
                  outputs=[output_image, output_mask])
     # button video
-    button_video.click(inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
+    button_video.click(run_inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
                                     min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
-                                    crop_nms_thresh, input_video],
+                                    crop_nms_thresh, input_video, text],
                        outputs=[output_video])
 
 
