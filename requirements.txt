@@ -1,0 +1,8 @@
+gradio==3.24.1
+numpy==1.21.5
+opencv_python==4.6.0.66
+Pillow==9.5.0
+segment_anything==1.0
+transformers==4.27.4
+torch==1.13.1
+torchvision==0.14.1
