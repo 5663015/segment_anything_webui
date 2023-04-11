@@ -3,12 +3,16 @@
 This project is based on **[Segment Anything Model](https://segment-anything.com/)** by Meta. The UI is based on [Gradio](https://gradio.app/). 
 
 - Try deme on HF: [AIBoy1993/segment_anything_webui](https://huggingface.co/spaces/AIBoy1993/segment_anything_webui)
+- [GitHub](https://github.com/5663015/segment_anything_webui)
 
 ![](./images/20230408023615.png)
 
 ## Change Logs
 
-- [2023-4-11] Support video segmentation. 
+- [2023-4-11] 
+  - Support video segmentation. A short video can be automatically segmented by SAM.
+  - Support text prompt segmentation using [OWL-ViT](https://huggingface.co/docs/transformers/v4.27.2/en/model_doc/owlvit#overview) (Vision Transformer for Open-World Localization) model.
+
 
 ## **Usage**
 
@@ -34,16 +38,25 @@ git clone https://github.com/5663015/segment_anything_webui.git
 
   - `vit_b`: [ViT-B SAM model](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
 
+- Under `checkpoints`, make a new folder named `models--google--owlvit-base-patch32`, and put the downloaded [OWL-ViT weights](https://huggingface.co/google/owlvit-base-patch32) files in `models--google--owlvit-base-patch32`. 
 - Run：
 
 ```
 python app.py
 ```
 
-**Note：** Default model is `vit_b`，the demo can run on CPU. Default device is `cuda`。
+**Note：** Default model is `vit_b`，the demo can run on CPU. Default device is `cpu`。
 
 ## TODO
 
-- Add segmentation prompt (point and box)
+- [x] Video segmentation
 
-- Add text prompt
+- [x] Add text prompt
+
+- [ ] Add segmentation prompt (point and box)
+
+## Reference
+
+- Thanks to the wonderful work [Segment Anything](https://segment-anything.com/) and [OWL-ViT](https://arxiv.org/abs/2205.06230)
+- Some video processing code references [kadirnar/segment-anything-video](https://github.com/kadirnar/segment-anything-video), and some OWL-ViT code references [ngthanhtin/owlvit_segment_anything](https://github.com/ngthanhtin/owlvit_segment_anything).
+
