@@ -51,8 +51,12 @@ with gr.Blocks() as demo:
             with gr.Column():
                 input_image = gr.Image(type="numpy")
                 text = gr.Textbox(label='Text prompt(optional)', info=
-                    'If you input a word, the OWL-ViT model will be run to detect the object in image, '
-                    'and the box will be fed into SAM model to predict mask.')
+                    'If you type words, the OWL-ViT model will be used to detect the objects in the image, '
+                    'and the boxes will be feed into SAM model to predict mask. Please use English.',
+                                  placeholder='Multiple words are separated by commas')
+                owl_vit_threshold = gr.Slider(value=0.1, minimum=0, maximum=1.0, step=0.01, label="OWL ViT Object Detection threshold",
+                                            info='''A small threshold will generate more objects, but may causing OOM. 
+                                            A big threshold may not detect objects, resulting in an error ''')
                 button = gr.Button("Auto!")
             with gr.Tab(label='Image+Mask'):
                 output_image = gr.Image(type='numpy')
@@ -96,12 +100,12 @@ with gr.Blocks() as demo:
     # button image
     button.click(run_inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
                                     min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
-                                    crop_nms_thresh, input_image, text],
+                                    crop_nms_thresh, owl_vit_threshold, input_image, text],
                  outputs=[output_image, output_mask])
     # button video
     button_video.click(run_inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
                                     min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
-                                    crop_nms_thresh, input_video, text],
+                                    crop_nms_thresh, owl_vit_threshold, input_video, text],
                        outputs=[output_video])
 
 
