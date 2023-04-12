@@ -119,7 +119,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
+/flagged
 *.pth
 main.py
 utils.py
+test.py
