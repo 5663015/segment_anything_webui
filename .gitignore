@@ -120,6 +120,7 @@ venv.bak/
 # mkdocs documentation
 /site
 /flagged
+/gradio_cached_examples
 *.pth
 main.py
 utils.py

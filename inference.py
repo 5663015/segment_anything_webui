@@ -1,3 +1,4 @@
+import os
 import cv2
 import torch
 import numpy as np
@@ -12,6 +13,19 @@ models = {
 	'vit_l': './checkpoints/sam_vit_l_0b3195.pth',
 	'vit_h': './checkpoints/sam_vit_h_4b8939.pth'
 }
+
+image_examples = [
+    [os.path.join(os.path.dirname(__file__), "./images/53960-scaled.jpg"), 0, []],
+    [os.path.join(os.path.dirname(__file__), "./images/2388455-scaled.jpg"), 1, []],
+    [os.path.join(os.path.dirname(__file__), "./images/1.jpg"),2,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/2.jpg"),3,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/3.jpg"),4,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/4.jpg"),5,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/5.jpg"),6,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/6.jpg"),7,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/7.jpg"),8,[]],
+    [os.path.join(os.path.dirname(__file__), "./images/8.jpg"),9,[]]
+]
 
 
 def plot_boxes(img, boxes):
@@ -82,44 +96,50 @@ def generator_inference(device, model_type, points_per_side, pred_iou_thresh, st
 		return 'output.mp4'
 
 
-def predictor_inference(device, model_type, input_x, input_text, owl_vit_threshold=0.1):
+def predictor_inference(device, model_type, input_x, input_text, selected_points, owl_vit_threshold=0.1):
 	# sam model
 	sam = sam_model_registry[model_type](checkpoint=models[model_type]).to(device)
 	predictor = SamPredictor(sam)
 	predictor.set_image(input_x)  # Process the image to produce an image embedding
 
-	# split input text
-	input_text = [input_text.split(',')]
+	if input_text != '':
+		# split input text
+		input_text = [input_text.split(',')]
+		# OWL-ViT model
+		processor = OwlViTProcessor.from_pretrained('./checkpoints/models--google--owlvit-base-patch32')
+		owlvit_model = OwlViTForObjectDetection.from_pretrained("./checkpoints/models--google--owlvit-base-patch32").to(device)
+		# get outputs
+		input_text = processor(text=input_text, images=input_x, return_tensors="pt").to(device)
+		outputs = owlvit_model(**input_text)
+		target_size = torch.Tensor([input_x.shape[:2]]).to(device)
+		results = processor.post_process_object_detection(outputs=outputs, target_sizes=target_size,
+		                                                  threshold=owl_vit_threshold)
 
-	# OWL-ViT model
-	# processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
-	# owlvit_model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32").to(device)
-	processor = OwlViTProcessor.from_pretrained('./checkpoints/models--google--owlvit-base-patch32')
-	owlvit_model = OwlViTForObjectDetection.from_pretrained("./checkpoints/models--google--owlvit-base-patch32").to(device)
+		# get the box with best score
+		scores = torch.sigmoid(outputs.logits)
+		# best_scores, best_idxs = torch.topk(scores, k=1, dim=1)
+		# best_idxs = best_idxs.squeeze(1).tolist()
 
-	# get outputs
-	input_text = processor(text=input_text, images=input_x, return_tensors="pt").to(device)
-	outputs = owlvit_model(**input_text)
-	target_size = torch.Tensor([input_x.shape[:2]]).to(device)
-	results = processor.post_process_object_detection(outputs=outputs, target_sizes=target_size,
-	                                                  threshold=owl_vit_threshold)
+		i = 0  # Retrieve predictions for the first image for the corresponding text queries
+		boxes_tensor = results[i]["boxes"]  # [best_idxs]
+		boxes = boxes_tensor.cpu().detach().numpy()
+		transformed_boxes = predictor.transform.apply_boxes_torch(torch.Tensor(boxes).to(device),
+		                                                          input_x.shape[:2])  # apply transform to original boxes
+		transformed_boxes = transformed_boxes.unsqueeze(0)
+	else:
+		transformed_boxes = None
 
-	# get the box with best score
-	scores = torch.sigmoid(outputs.logits)
-	# best_scores, best_idxs = torch.topk(scores, k=1, dim=1)
-	# best_idxs = best_idxs.squeeze(1).tolist()
-
-	i = 0  # Retrieve predictions for the first image for the corresponding text queries
-	boxes_tensor = results[i]["boxes"]  # [best_idxs]
-	print(boxes_tensor.size())
-	boxes = boxes_tensor.cpu().detach().numpy()
-	transformed_boxes = predictor.transform.apply_boxes_torch(torch.Tensor(boxes).to(device),
-	                                                          input_x.shape[:2])  # apply transform to original boxes
-
+	# points
+	if len(selected_points) != 0:
+		points = torch.Tensor([[p for p, _ in selected_points]]).to(device)
+		labels = torch.Tensor([[int(l) for _, l in selected_points]]).to(device)
+	else:
+		points, labels = None, None
+	print(transformed_boxes.size(), points.size(), labels.size())
 	# predict segmentation according to the boxes
 	masks, scores, logits = predictor.predict_torch(
-		point_coords=None,
-		point_labels=None,
+		point_coords=points,
+		point_labels=labels,
 		boxes=transformed_boxes,  # only one box
 		multimask_output=False,
 	)
@@ -130,11 +150,13 @@ def predictor_inference(device, model_type, input_x, input_text, owl_vit_thresho
 		for i in range(3):
 			mask_all[ann[0] == True, i] = color_mask[i]
 	img = input_x / 255 * 0.3 + mask_all * 0.7
-	img = plot_boxes(img, boxes_tensor)  # image + mask + boxes
+	if input_text != '':
+		img = plot_boxes(img, boxes_tensor)  # image + mask + boxes
 
 	# free the memory
-	owlvit_model.cpu()
-	del owlvit_model
+	if input_text != '':
+		owlvit_model.cpu()
+		del owlvit_model
 	del input_text
 	gc.collect()
 	torch.cuda.empty_cache()
@@ -144,11 +166,16 @@ def predictor_inference(device, model_type, input_x, input_text, owl_vit_thresho
 
 def run_inference(device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh, min_mask_region_area,
                   stability_score_offset, box_nms_thresh, crop_n_layers, crop_nms_thresh, owl_vit_threshold, input_x,
-                  input_text):
-	print('prompt text: ', input_text)
-	if input_text != '' and not isinstance(input_x, str):  # user input text
+                  input_text, selected_points):
+	# if input_x is int, the image is selected from examples
+	if isinstance(input_x, int):
+		input_x = cv2.imread(image_examples[input_x][0])
+		input_x = cv2.cvtColor(input_x, cv2.COLOR_BGR2RGB)
+	if (input_text != '' and not isinstance(input_x, str)) or len(selected_points) != 0:  # user input text or points
 		print('use predictor_inference')
-		return predictor_inference(device, model_type, input_x, input_text, owl_vit_threshold)
+		print('prompt text: ', input_text)
+		print('prompt points length: ', len(selected_points))
+		return predictor_inference(device, model_type, input_x, input_text, selected_points, owl_vit_threshold)
 	else:
 		print('use generator_inference')
 		return generator_inference(device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
