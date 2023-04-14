@@ -10,8 +10,12 @@ This project is based on **[Segment Anything Model](https://segment-anything.com
 ## Change Logs
 
 - [2023-4-11] 
-  - Support video segmentation. A short video can be automatically segmented by SAM.
-  - Support text prompt segmentation using [OWL-ViT](https://huggingface.co/docs/transformers/v4.27.2/en/model_doc/owlvit#overview) (Vision Transformer for Open-World Localization) model.
+  - Support **video segmentation**. A short video can be automatically segmented by SAM.
+  - Support **text prompt segmentation using [OWL-ViT](https://huggingface.co/docs/transformers/v4.27.2/en/model_doc/owlvit#overview)** (Vision Transformer for Open-World Localization) model. [Text prompt  is not yet released](https://github.com/facebookresearch/segment-anything/issues/4) in the current SAM version, so it is implemented indirectly using OWL-ViT. 
+- [2023-4-15]
+  - Support **points prompt segmentation**. But due to [this issue](https://github.com/facebookresearch/segment-anything/issues/111), using text and point prompts together may result in an error. 
+  - About **boxes prompt**, it does not seem possible to draw the box directly in Gradio. One idea is to use two points to represent the box, but this is not accurate or elegant. Also, text prompt implements box prompt indirectly, so I won't implement box prompt directly for now. If you have any ideas about box-drawing in Gradio, please tell me.
+
 
 
 ## **Usage**
@@ -53,7 +57,11 @@ python app.py
 
 - [x] Add text prompt
 
-- [ ] Add segmentation prompt (point and box)
+- [x] Add points prompt
+
+- [ ] ~~Add boxes prompt~~
+
+- [ ] Try to combine with ControlNet and Stable Diffusion. Use SAM to generate dataset for fine-tuning ControlNet, and generate new image with SD. 
 
 ## Reference
 

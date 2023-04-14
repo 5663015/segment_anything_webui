@@ -105,6 +105,7 @@ def predictor_inference(device, model_type, input_x, input_text, selected_points
 	if input_text != '':
 		# split input text
 		input_text = [input_text.split(',')]
+		print(input_text)
 		# OWL-ViT model
 		processor = OwlViTProcessor.from_pretrained('./checkpoints/models--google--owlvit-base-patch32')
 		owlvit_model = OwlViTForObjectDetection.from_pretrained("./checkpoints/models--google--owlvit-base-patch32").to(device)
@@ -123,22 +124,26 @@ def predictor_inference(device, model_type, input_x, input_text, selected_points
 		i = 0  # Retrieve predictions for the first image for the corresponding text queries
 		boxes_tensor = results[i]["boxes"]  # [best_idxs]
 		boxes = boxes_tensor.cpu().detach().numpy()
+		# boxes = boxes[np.newaxis, :, :]
 		transformed_boxes = predictor.transform.apply_boxes_torch(torch.Tensor(boxes).to(device),
 		                                                          input_x.shape[:2])  # apply transform to original boxes
-		transformed_boxes = transformed_boxes.unsqueeze(0)
+		# transformed_boxes = transformed_boxes.unsqueeze(0)
+		print(transformed_boxes.size(), boxes.shape)
 	else:
 		transformed_boxes = None
 
 	# points
 	if len(selected_points) != 0:
-		points = torch.Tensor([[p for p, _ in selected_points]]).to(device)
-		labels = torch.Tensor([[int(l) for _, l in selected_points]]).to(device)
+		points = torch.Tensor([p for p, _ in selected_points]).to(device).unsqueeze(1)
+		labels = torch.Tensor([int(l) for _, l in selected_points]).to(device).unsqueeze(1)
+		transformed_points = predictor.transform.apply_coords_torch(points, input_x.shape[:2])
+		print(points.size(), transformed_points.size(), labels.size(), input_x.shape, points)
 	else:
-		points, labels = None, None
-	print(transformed_boxes.size(), points.size(), labels.size())
+		transformed_points, labels = None, None
+
 	# predict segmentation according to the boxes
 	masks, scores, logits = predictor.predict_torch(
-		point_coords=points,
+		point_coords=transformed_points,
 		point_labels=labels,
 		boxes=transformed_boxes,  # only one box
 		multimask_output=False,

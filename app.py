@@ -102,13 +102,17 @@ with gr.Blocks() as demo:
             # show only mask
             with gr.Tab(label='Mask'):
                 output_mask = gr.Image(type='numpy')
+        def process_example(img, ori_img, sel_p):
+            return ori_img, []
 
         example = gr.Examples(
             examples=image_examples,
             inputs=[input_image, original_image, selected_points],
-            outputs=original_image,
+            outputs=[original_image, selected_points],
+	        fn=process_example,
+	        run_on_click=True
         )
-        # example.dataset.set_event_trigger('store', fn=store_example_img, inputs=input_image, outputs=original_image, collects_event_data=True)
+
     # Segment video
     with gr.Tab(label='Video'):
         with gr.Row().style(equal_height=True):
