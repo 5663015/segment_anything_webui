@@ -85,12 +85,14 @@ def generator_inference(device, model_type, points_per_side, pred_iou_thresh, st
 		W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 		fps = int(cap.get(cv2.CAP_PROP_FPS))
 		out = cv2.VideoWriter("output.mp4", cv2.VideoWriter_fourcc('x', '2', '6', '4'), fps, (W, H), isColor=True)
-		for _ in progress.tqdm(range(int(frames_num)),
-		                       desc='Processing video ({} frames, size {}x{})'.format(int(frames_num), W, H)):
+		while True:
 			ret, frame = cap.read()  # read a frame
-			result, mask_all = segment_one(frame, mask_generator, seed=2023)
-			result = (result * 255).astype(np.uint8)
-			out.write(result)
+			if ret:
+				result, mask_all = segment_one(frame, mask_generator, seed=2023)
+				result = (result * 255).astype(np.uint8)
+				out.write(result)
+			else:
+				break
 		out.release()
 		cap.release()
 		return 'output.mp4'
@@ -171,7 +173,7 @@ def predictor_inference(device, model_type, input_x, input_text, selected_points
 
 def run_inference(device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh, min_mask_region_area,
                   stability_score_offset, box_nms_thresh, crop_n_layers, crop_nms_thresh, owl_vit_threshold, input_x,
-                  input_text, selected_points):
+                  input_text, selected_points=[]):
 	# if input_x is int, the image is selected from examples
 	if isinstance(input_x, int):
 		input_x = cv2.imread(image_examples[input_x][0])
