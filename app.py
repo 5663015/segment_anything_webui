@@ -188,7 +188,7 @@ with gr.Blocks() as demo:
     # button video
     button_video.click(run_inference, inputs=[device, model_type, points_per_side, pred_iou_thresh, stability_score_thresh,
                                     min_mask_region_area, stability_score_offset, box_nms_thresh, crop_n_layers,
-                                    crop_nms_thresh, owl_vit_threshold, input_video, text],
+                                    crop_nms_thresh, owl_vit_threshold, input_video, text, gr.State([])],
                        outputs=[output_video])
 
 
